@@ -109,7 +109,9 @@ export default function QuizPage({
             }
         } catch (error) {
             console.error("Error fetching quiz:", error);
-            toast.error("حدث خطأ أثناء تحميل الاختبار");
+            const errorMessage = error instanceof Error ? error.message : "حدث خطأ غير معروف";
+            console.error("Error details:", errorMessage);
+            toast.error(`حدث خطأ أثناء تحميل الاختبار: ${errorMessage}`);
         } finally {
             setLoading(false);
         }
@@ -121,9 +123,15 @@ export default function QuizPage({
             if (response.ok) {
                 const data = await response.json();
                 setNavigation(data);
+            } else {
+                // Navigation is optional, so we don't show error to user
+                // Just log it for debugging
+                const errorText = await response.text();
+                console.warn("Navigation fetch failed:", response.status, errorText);
             }
         } catch (error) {
-            console.error("Error fetching navigation:", error);
+            // Navigation is optional, so we don't show error to user
+            console.warn("Error fetching navigation:", error);
         }
     };
 

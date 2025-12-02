@@ -70,7 +70,7 @@ const teacherRoutes = [
     },
     {
         icon: Ticket,
-        label: "كوبونات الخصم",
+        label: "الاكواد",
         href: "/dashboard/teacher/promocodes",
     },
 ];
@@ -123,7 +123,7 @@ const adminRoutes = [
     },
     {
         icon: Ticket,
-        label: "كوبونات الخصم",
+        label: "الاكواد",
         href: "/dashboard/admin/promocodes",
     },
 ];

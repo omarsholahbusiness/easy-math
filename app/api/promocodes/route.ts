@@ -25,11 +25,41 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        const promocodes = await db.promoCode.findMany({
-            orderBy: {
-                createdAt: "desc",
-            },
-        });
+        // Try to fetch with course relation, fallback to without if relation doesn't exist
+        let promocodes;
+        try {
+            promocodes = await db.promoCode.findMany({
+                include: {
+                    course: {
+                        select: {
+                            id: true,
+                            title: true,
+                        },
+                    },
+                },
+                orderBy: {
+                    createdAt: "desc",
+                },
+            });
+        } catch (error) {
+            // If relation doesn't exist (migration not run), fetch without include
+            if (error instanceof Error && (
+                error.message.includes("Unknown arg") ||
+                error.message.includes("relation") ||
+                error.message.includes("courseId")
+            )) {
+                console.warn("[PROMOCODES_GET] Course relation not available, fetching without include. Please run migration.");
+                promocodes = await db.promoCode.findMany({
+                    orderBy: {
+                        createdAt: "desc",
+                    },
+                });
+                // Add null course to each promocode for consistency
+                promocodes = promocodes.map((p: any) => ({ ...p, course: null }));
+            } else {
+                throw error;
+            }
+        }
 
         return NextResponse.json(promocodes);
     } catch (error) {
@@ -72,6 +102,7 @@ export async function POST(req: NextRequest) {
             validFrom,
             validUntil,
             description,
+            courseId,
         } = body;
 
         // Validate required fields
@@ -119,6 +150,19 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // Verify course exists if courseId is provided
+        if (courseId) {
+            const course = await db.course.findUnique({
+                where: { id: courseId },
+            });
+            if (!course) {
+                return new NextResponse(
+                    JSON.stringify({ error: "الكورس غير موجود" }),
+                    { status: 400, headers: { "Content-Type": "application/json" } }
+                );
+            }
+        }
+
         // Create promocode
         const promocode = await db.promoCode.create({
             data: {
@@ -132,6 +176,15 @@ export async function POST(req: NextRequest) {
                 validFrom: validFrom ? new Date(validFrom) : null,
                 validUntil: validUntil ? new Date(validUntil) : null,
                 description: description || null,
+                courseId: courseId || null,
+            },
+            include: {
+                course: {
+                    select: {
+                        id: true,
+                        title: true,
+                    },
+                },
             },
         });
 

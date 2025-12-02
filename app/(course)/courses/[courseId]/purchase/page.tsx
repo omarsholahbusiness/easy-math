@@ -89,6 +89,7 @@ export default function PurchasePage({
         body: JSON.stringify({
           code: promocode.trim(),
           coursePrice: course.price || 0,
+          courseId: course.id,
         }),
       });
 
@@ -231,29 +232,27 @@ export default function PurchasePage({
                     <span>{promocodeValidation.originalPrice} جنيه</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
-                  {promocodeValidation?.valid && (
-                    <div className="flex items-center gap-1 text-green-600">
-                      <CheckCircle className="h-5 w-5" />
-                      <span className="text-sm font-medium">
-                        خصم {promocodeValidation.discountAmount} جنيه
-                      </span>
-                    </div>
-                  )}
-                  <div className="text-2xl font-bold text-[#0083d3]">
-                    {finalPrice.toFixed(2)} جنيه
+                {promocodeValidation?.valid && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span className="text-sm font-medium text-green-600">
+                      تم تطبيق الكود بنجاح
+                    </span>
                   </div>
+                )}
+                <div className="text-2xl font-bold text-[#005bd3]">
+                  {finalPrice.toFixed(2)} جنيه
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Promocode Section */}
+          {/* Code Section */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Ticket className="h-5 w-5" />
-                كوبون الخصم
+                الكود
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -263,7 +262,7 @@ export default function PurchasePage({
                     <Input
                       value={promocode}
                       onChange={(e) => setPromocode(e.target.value.toUpperCase())}
-                      placeholder="أدخل رمز الكوبون"
+                      placeholder="أدخل الكود للحصول على الكورس"
                       className="flex-1"
                       onKeyPress={(e) => {
                         if (e.key === "Enter") {
@@ -274,31 +273,31 @@ export default function PurchasePage({
                     <Button
                       onClick={handleValidatePromocode}
                       disabled={!promocode.trim() || isValidatingPromocode}
-                      variant="outline"
+                      className="bg-[#005bd3] hover:bg-[#005bd3]/90"
                     >
                       {isValidatingPromocode ? "جارٍ..." : "تطبيق"}
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-green-700">
+                  <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
                       <CheckCircle className="h-5 w-5" />
                       <span className="font-medium">
-                        {promocode} - خصم {promocodeValidation.discountAmount} جنيه
+                        تم شراء الكورس مقابل {promocodeValidation.finalPrice} جنيه
                       </span>
                     </div>
                     <Button
                       onClick={handleRemovePromocode}
                       variant="ghost"
                       size="sm"
-                      className="text-green-700 hover:text-green-900"
+                      className="text-green-700 dark:text-green-300 hover:text-green-900 dark:hover:text-green-100"
                     >
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
                 )}
                 {promocodeValidation && !promocodeValidation.valid && promocodeValidation.error && (
-                  <div className="text-sm text-red-600 flex items-center gap-1">
+                  <div className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
                     <AlertCircle className="h-4 w-4" />
                     {promocodeValidation.error}
                   </div>
@@ -356,7 +355,7 @@ export default function PurchasePage({
             <Button
               onClick={handlePurchase}
               disabled={isPurchasing || !hasSufficientBalance}
-              className="w-full bg-[#0083d3] hover:bg-[#0083d3]/90 text-white"
+              className="w-full bg-[#005bd3] hover:bg-[#005bd3]/90 text-white"
               size="lg"
             >
               {isPurchasing ? (
@@ -372,8 +371,8 @@ export default function PurchasePage({
             <div className="text-center text-sm text-muted-foreground">
               <p>سيتم خصم {finalPrice.toFixed(2)} جنيه من رصيدك</p>
               {promocodeValidation?.valid && (
-                <p className="text-green-600 font-medium">
-                  تم تطبيق خصم {promocodeValidation.discountAmount} جنيه
+                <p className="text-green-600 dark:text-green-400 font-medium">
+                  تم تطبيق خصم 100% (الكورس مجاني)
                 </p>
               )}
               <p>ستتمكن من الوصول إلى الكورس فوراً بعد الشراء</p>

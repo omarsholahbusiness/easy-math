@@ -7,49 +7,64 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Search, Ticket } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Ticket, Copy, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+
+interface Course {
+    id: string;
+    title: string;
+}
 
 interface PromoCode {
     id: string;
     code: string;
     discountType: "PERCENTAGE" | "FIXED";
     discountValue: number;
-    minPurchase: number | null;
-    maxDiscount: number | null;
     usageLimit: number | null;
     usedCount: number;
     isActive: boolean;
-    validFrom: string | null;
-    validUntil: string | null;
-    description: string | null;
+    courseId: string | null;
+    course: {
+        id: string;
+        title: string;
+    } | null;
     createdAt: string;
     updatedAt: string;
 }
 
 const TeacherPromoCodesPage = () => {
     const [promocodes, setPromocodes] = useState<PromoCode[]>([]);
+    const [courses, setCourses] = useState<Course[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [isCopyPopoverOpen, setIsCopyPopoverOpen] = useState(false);
     const [editingPromocode, setEditingPromocode] = useState<PromoCode | null>(null);
     
-    // Form state
-    const [code, setCode] = useState("");
-    const [discountType, setDiscountType] = useState<"PERCENTAGE" | "FIXED">("PERCENTAGE");
-    const [discountValue, setDiscountValue] = useState("");
-    const [minPurchase, setMinPurchase] = useState("");
-    const [maxDiscount, setMaxDiscount] = useState("");
-    const [usageLimit, setUsageLimit] = useState("");
-    const [isActive, setIsActive] = useState(true);
-    const [validFrom, setValidFrom] = useState("");
-    const [validUntil, setValidUntil] = useState("");
-    const [description, setDescription] = useState("");
+    // Create form state
+    const [selectedCourse, setSelectedCourse] = useState("");
+    const [quantity, setQuantity] = useState("1");
+    const [isCreating, setIsCreating] = useState(false);
+
+    // Edit form state
+    const [editCourseId, setEditCourseId] = useState("");
+    const [isUpdating, setIsUpdating] = useState(false);
+
+    // Delete form state
+    const [deleteCourseId, setDeleteCourseId] = useState("all");
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // Copy form state
+    const [copyCourseId, setCopyCourseId] = useState("all");
 
     useEffect(() => {
         fetchPromocodes();
+        fetchCourses();
     }, []);
 
     const fetchPromocodes = async () => {
@@ -59,106 +74,113 @@ const TeacherPromoCodesPage = () => {
                 const data = await response.json();
                 setPromocodes(data);
             } else {
-                toast.error("حدث خطأ أثناء جلب الكوبونات");
+                toast.error("حدث خطأ أثناء جلب الأكواد");
             }
         } catch (error) {
             console.error("Error fetching promocodes:", error);
-            toast.error("حدث خطأ أثناء جلب الكوبونات");
+            toast.error("حدث خطأ أثناء جلب الأكواد");
         } finally {
             setLoading(false);
         }
     };
 
-    const resetForm = () => {
-        setCode("");
-        setDiscountType("PERCENTAGE");
-        setDiscountValue("");
-        setMinPurchase("");
-        setMaxDiscount("");
-        setUsageLimit("");
-        setIsActive(true);
-        setValidFrom("");
-        setValidUntil("");
-        setDescription("");
-        setEditingPromocode(null);
-    };
-
-    const openCreateDialog = () => {
-        resetForm();
-        setIsDialogOpen(true);
-    };
-
-    const openEditDialog = (promocode: PromoCode) => {
-        setCode(promocode.code);
-        setDiscountType(promocode.discountType);
-        setDiscountValue(promocode.discountValue.toString());
-        setMinPurchase(promocode.minPurchase?.toString() || "");
-        setMaxDiscount(promocode.maxDiscount?.toString() || "");
-        setUsageLimit(promocode.usageLimit?.toString() || "");
-        setIsActive(promocode.isActive);
-        setValidFrom(promocode.validFrom ? promocode.validFrom.split("T")[0] : "");
-        setValidUntil(promocode.validUntil ? promocode.validUntil.split("T")[0] : "");
-        setDescription(promocode.description || "");
-        setEditingPromocode(promocode);
-        setIsDialogOpen(true);
-    };
-
-    const handleSubmit = async () => {
-        // Validation
-        if (!code.trim()) {
-            toast.error("رمز الكوبون مطلوب");
-            return;
-        }
-
-        if (!discountValue || parseFloat(discountValue) <= 0) {
-            toast.error("قيمة الخصم يجب أن تكون أكبر من الصفر");
-            return;
-        }
-
-        const data = {
-            code: code.trim(),
-            discountType,
-            discountValue: parseFloat(discountValue),
-            minPurchase: minPurchase ? parseFloat(minPurchase) : null,
-            maxDiscount: maxDiscount ? parseFloat(maxDiscount) : null,
-            usageLimit: usageLimit ? parseInt(usageLimit) : null,
-            isActive,
-            validFrom: validFrom || null,
-            validUntil: validUntil || null,
-            description: description.trim() || null,
-        };
-
+    const fetchCourses = async () => {
         try {
-            const url = editingPromocode 
-                ? `/api/promocodes/${editingPromocode.id}`
-                : "/api/promocodes";
-            const method = editingPromocode ? "PATCH" : "POST";
+            const response = await fetch("/api/courses");
+            if (response.ok) {
+                const data = await response.json();
+                const publishedCourses = data.filter((course: Course) => course.isPublished);
+                setCourses(publishedCourses);
+            }
+        } catch (error) {
+            console.error("Error fetching courses:", error);
+        }
+    };
 
-            const response = await fetch(url, {
-                method,
+    const handleCreateCodes = async () => {
+        if (!selectedCourse) {
+            toast.error("يرجى اختيار الكورس");
+            return;
+        }
+
+        const qty = parseInt(quantity);
+        if (qty < 1 || qty > 99) {
+            toast.error("الكمية يجب أن تكون بين 1 و 99");
+            return;
+        }
+
+        setIsCreating(true);
+        try {
+            const response = await fetch("/api/promocodes/bulk", {
+                method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(data),
+                body: JSON.stringify({
+                    courseId: selectedCourse,
+                    quantity: qty,
+                }),
             });
 
             if (response.ok) {
-                toast.success(editingPromocode ? "تم تحديث الكوبون بنجاح" : "تم إنشاء الكوبون بنجاح");
-                setIsDialogOpen(false);
-                resetForm();
+                const data = await response.json();
+                toast.success(`تم إنشاء ${data.count} كود بنجاح`);
+                setIsCreateDialogOpen(false);
+                setSelectedCourse("");
+                setQuantity("1");
                 fetchPromocodes();
             } else {
                 const errorData = await response.json();
-                toast.error(errorData.error || "حدث خطأ");
+                toast.error(errorData.error || "حدث خطأ أثناء إنشاء الأكواد");
             }
         } catch (error) {
-            console.error("Error saving promocode:", error);
-            toast.error("حدث خطأ أثناء حفظ الكوبون");
+            console.error("Error creating codes:", error);
+            toast.error("حدث خطأ أثناء إنشاء الأكواد");
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+    const handleEdit = (promocode: PromoCode) => {
+        setEditingPromocode(promocode);
+        setEditCourseId(promocode.courseId || "none");
+        setIsEditDialogOpen(true);
+    };
+
+    const handleUpdate = async () => {
+        if (!editingPromocode) return;
+
+        setIsUpdating(true);
+        try {
+            const response = await fetch(`/api/promocodes/${editingPromocode.id}`, {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    courseId: editCourseId === "none" ? null : editCourseId,
+                }),
+            });
+
+            if (response.ok) {
+                toast.success("تم تحديث الكود بنجاح");
+                setIsEditDialogOpen(false);
+                setEditingPromocode(null);
+                fetchPromocodes();
+            } else {
+                const errorData = await response.json();
+                toast.error(errorData.error || "حدث خطأ أثناء التحديث");
+            }
+        } catch (error) {
+            console.error("Error updating code:", error);
+            toast.error("حدث خطأ أثناء التحديث");
+        } finally {
+            setIsUpdating(false);
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm("هل أنت متأكد من حذف هذا الكوبون؟")) {
+        if (!confirm("هل أنت متأكد من حذف هذا الكود؟")) {
             return;
         }
 
@@ -168,20 +190,91 @@ const TeacherPromoCodesPage = () => {
             });
 
             if (response.ok) {
-                toast.success("تم حذف الكوبون بنجاح");
+                toast.success("تم حذف الكود بنجاح");
                 fetchPromocodes();
             } else {
-                toast.error("حدث خطأ أثناء حذف الكوبون");
+                toast.error("حدث خطأ أثناء حذف الكود");
             }
         } catch (error) {
-            console.error("Error deleting promocode:", error);
-            toast.error("حدث خطأ أثناء حذف الكوبون");
+            console.error("Error deleting code:", error);
+            toast.error("حدث خطأ أثناء حذف الكود");
         }
     };
 
-    const filteredPromocodes = promocodes.filter(promo =>
+    const handleBulkDelete = async () => {
+        setIsDeleting(true);
+        try {
+            const response = await fetch("/api/promocodes/bulk-delete", {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    courseId: deleteCourseId === "all" ? null : deleteCourseId,
+                }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                toast.success(data.message || "تم الحذف بنجاح");
+                setIsDeleteDialogOpen(false);
+                setDeleteCourseId("all");
+                fetchPromocodes();
+            } else {
+                const errorData = await response.json();
+                toast.error(errorData.error || "حدث خطأ أثناء الحذف");
+            }
+        } catch (error) {
+            console.error("Error deleting codes:", error);
+            toast.error("حدث خطأ أثناء الحذف");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const handleCopyCodes = async () => {
+        try {
+            // Filter codes based on selection
+            let codesToCopy = promocodes.filter(
+                (code) => code.isActive && code.usedCount === 0
+            );
+
+            if (copyCourseId !== "all") {
+                codesToCopy = codesToCopy.filter((code) => code.courseId === copyCourseId);
+            }
+
+            const codesText = codesToCopy.map((code) => code.code).join("\n");
+
+            if (codesText) {
+                await navigator.clipboard.writeText(codesText);
+                toast.success(`تم نسخ ${codesToCopy.length} كود إلى الحافظة`);
+                setIsCopyPopoverOpen(false);
+            } else {
+                toast.error("لا توجد أكواد متاحة للنسخ");
+            }
+        } catch (error) {
+            console.error("Error copying codes:", error);
+            toast.error("حدث خطأ أثناء النسخ");
+        }
+    };
+
+    const incrementQuantity = () => {
+        const qty = parseInt(quantity) || 1;
+        if (qty < 99) {
+            setQuantity((qty + 1).toString());
+        }
+    };
+
+    const decrementQuantity = () => {
+        const qty = parseInt(quantity) || 1;
+        if (qty > 1) {
+            setQuantity((qty - 1).toString());
+        }
+    };
+
+    const filteredPromocodes = promocodes.filter((promo) =>
         promo.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (promo.description && promo.description.toLowerCase().includes(searchTerm.toLowerCase()))
+        (promo.course?.title && promo.course.title.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     if (loading) {
@@ -196,37 +289,79 @@ const TeacherPromoCodesPage = () => {
         <div className="p-6 space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                    كوبونات الخصم
+                    الأكواد
                 </h1>
-                <Button onClick={openCreateDialog} className="bg-[#0083d3] hover:bg-[#0083d3]/90">
-                    <Plus className="h-4 w-4 mr-2" />
-                    إنشاء كوبون جديد
-                </Button>
+                <div className="flex flex-col gap-4 items-end">
+                    <Button 
+                        onClick={() => setIsCreateDialogOpen(true)} 
+                        className="bg-[#005bd3] hover:bg-[#005bd3]/90"
+                    >
+                        <Plus className="h-4 w-4 mr-2" />
+                        إنشاء كود جديد
+                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Popover open={isCopyPopoverOpen} onOpenChange={setIsCopyPopoverOpen}>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline">
+                                    <Copy className="h-4 w-4 mr-2" />
+                                    نسخ الأكواد المتاحة
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80">
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label>الكورس</Label>
+                                        <Select value={copyCourseId} onValueChange={setCopyCourseId}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">جميع الكورسات</SelectItem>
+                                                {courses.map((course) => (
+                                                    <SelectItem key={course.id} value={course.id}>
+                                                        {course.title}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <Button onClick={handleCopyCodes} className="w-full bg-[#005bd3] hover:bg-[#005bd3]/90">
+                                        نسخ
+                                    </Button>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                        <Button 
+                            variant="destructive" 
+                            onClick={() => setIsDeleteDialogOpen(true)}
+                        >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            حذف الأكواد
+                        </Button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-4 justify-start">
+                <div className="flex items-center space-x-2 max-w-sm">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="البحث..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
             </div>
 
             <Card>
-                <CardHeader>
-                    <CardTitle>قائمة الكوبونات</CardTitle>
-                    <div className="flex items-center space-x-2 mt-4">
-                        <Search className="h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="البحث برمز الكوبون أو الوصف..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="max-w-sm"
-                        />
-                    </div>
-                </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                     {filteredPromocodes.length > 0 ? (
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="text-right">الرمز</TableHead>
-                                    <TableHead className="text-right">نوع الخصم</TableHead>
-                                    <TableHead className="text-right">قيمة الخصم</TableHead>
-                                    <TableHead className="text-right">الحد الأدنى</TableHead>
-                                    <TableHead className="text-right">الاستخدام</TableHead>
+                                    <TableHead className="text-right">الكود</TableHead>
+                                    <TableHead className="text-right">الكورس</TableHead>
+                                    <TableHead className="text-right">حالة الاستخدام</TableHead>
                                     <TableHead className="text-right">الحالة</TableHead>
                                     <TableHead className="text-right">الإجراءات</TableHead>
                                 </TableRow>
@@ -234,27 +369,21 @@ const TeacherPromoCodesPage = () => {
                             <TableBody>
                                 {filteredPromocodes.map((promo) => (
                                     <TableRow key={promo.id}>
-                                        <TableCell className="font-mono font-bold">
+                                        <TableCell>
                                             <Badge variant="outline" className="gap-1">
                                                 <Ticket className="h-3 w-3" />
                                                 {promo.code}
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
-                                            {promo.discountType === "PERCENTAGE" ? "نسبة مئوية" : "مبلغ ثابت"}
+                                            {promo.course?.title || "-"}
                                         </TableCell>
                                         <TableCell>
-                                            {promo.discountType === "PERCENTAGE" 
-                                                ? `${promo.discountValue}%` 
-                                                : `${promo.discountValue} جنيه`}
-                                        </TableCell>
-                                        <TableCell>
-                                            {promo.minPurchase ? `${promo.minPurchase} جنيه` : "-"}
-                                        </TableCell>
-                                        <TableCell>
-                                            {promo.usageLimit 
-                                                ? `${promo.usedCount}/${promo.usageLimit}` 
-                                                : promo.usedCount}
+                                            {promo.usedCount > 0 ? (
+                                                <Badge variant="secondary">مستخدم</Badge>
+                                            ) : (
+                                                <Badge variant="default" className="bg-green-500">متاح</Badge>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant={promo.isActive ? "default" : "secondary"}>
@@ -266,7 +395,7 @@ const TeacherPromoCodesPage = () => {
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
-                                                    onClick={() => openEditDialog(promo)}
+                                                    onClick={() => handleEdit(promo)}
                                                 >
                                                     <Edit className="h-4 w-4" />
                                                 </Button>
@@ -285,154 +414,176 @@ const TeacherPromoCodesPage = () => {
                         </Table>
                     ) : (
                         <div className="text-center text-muted-foreground py-8">
-                            {searchTerm ? "لا توجد نتائج" : "لا توجد كوبونات"}
+                            {searchTerm ? "لا توجد نتائج" : "لا توجد أكواد"}
                         </div>
                     )}
                 </CardContent>
             </Card>
 
-            {/* Create/Edit Dialog */}
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Create Code Dialog */}
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>
-                            {editingPromocode ? "تعديل الكوبون" : "إنشاء كوبون جديد"}
-                        </DialogTitle>
+                        <DialogTitle>إنشاء أكواد جديدة</DialogTitle>
                         <DialogDescription>
-                            {editingPromocode ? "قم بتعديل بيانات الكوبون" : "قم بإنشاء كوبون خصم جديد"}
+                            قم بإنشاء أكواد خصم للكورس المحدد
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 mt-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="code">رمز الكوبون *</Label>
-                                <Input
-                                    id="code"
-                                    value={code}
-                                    onChange={(e) => setCode(e.target.value.toUpperCase())}
-                                    placeholder="مثال: SUMMER2024"
-                                    disabled={!!editingPromocode}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="discountType">نوع الخصم *</Label>
-                                <Select value={discountType} onValueChange={(value: "PERCENTAGE" | "FIXED") => setDiscountType(value)}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="PERCENTAGE">نسبة مئوية (%)</SelectItem>
-                                        <SelectItem value="FIXED">مبلغ ثابت (جنيه)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="discountValue">قيمة الخصم *</Label>
-                                <Input
-                                    id="discountValue"
-                                    type="number"
-                                    value={discountValue}
-                                    onChange={(e) => setDiscountValue(e.target.value)}
-                                    placeholder={discountType === "PERCENTAGE" ? "مثال: 20" : "مثال: 50"}
-                                    min="0"
-                                    step="0.01"
-                                />
-                            </div>
-                            {discountType === "PERCENTAGE" && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="maxDiscount">الحد الأقصى للخصم (جنيه)</Label>
-                                    <Input
-                                        id="maxDiscount"
-                                        type="number"
-                                        value={maxDiscount}
-                                        onChange={(e) => setMaxDiscount(e.target.value)}
-                                        placeholder="مثال: 100"
-                                        min="0"
-                                        step="0.01"
-                                    />
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="minPurchase">الحد الأدنى للشراء (جنيه)</Label>
-                                <Input
-                                    id="minPurchase"
-                                    type="number"
-                                    value={minPurchase}
-                                    onChange={(e) => setMinPurchase(e.target.value)}
-                                    placeholder="مثال: 100"
-                                    min="0"
-                                    step="0.01"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="usageLimit">الحد الأقصى للاستخدام</Label>
-                                <Input
-                                    id="usageLimit"
-                                    type="number"
-                                    value={usageLimit}
-                                    onChange={(e) => setUsageLimit(e.target.value)}
-                                    placeholder="مثال: 100"
-                                    min="1"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="validFrom">تاريخ البداية</Label>
-                                <Input
-                                    id="validFrom"
-                                    type="date"
-                                    value={validFrom}
-                                    onChange={(e) => setValidFrom(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="validUntil">تاريخ الانتهاء</Label>
-                                <Input
-                                    id="validUntil"
-                                    type="date"
-                                    value={validUntil}
-                                    onChange={(e) => setValidUntil(e.target.value)}
-                                />
-                            </div>
-                        </div>
-
                         <div className="space-y-2">
-                            <Label htmlFor="description">الوصف</Label>
-                            <Input
-                                id="description"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="وصف الكوبون (اختياري)"
-                            />
+                            <Label htmlFor="course">الكورس *</Label>
+                            <Select value={selectedCourse} onValueChange={setSelectedCourse}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="اختر الكورس" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {courses.map((course) => (
+                                        <SelectItem key={course.id} value={course.id}>
+                                            {course.title}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
-
-                        <div className="flex items-center space-x-2">
-                            <input
-                                type="checkbox"
-                                id="isActive"
-                                checked={isActive}
-                                onChange={(e) => setIsActive(e.target.checked)}
-                                className="w-4 h-4"
-                            />
-                            <Label htmlFor="isActive" className="cursor-pointer">
-                                نشط
-                            </Label>
+                        <div className="space-y-2">
+                            <Label htmlFor="quantity">الكمية (1-99) *</Label>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={decrementQuantity}
+                                    disabled={parseInt(quantity) <= 1}
+                                >
+                                    <ChevronDown className="h-4 w-4" />
+                                </Button>
+                                <Input
+                                    id="quantity"
+                                    type="number"
+                                    min="1"
+                                    max="99"
+                                    value={quantity}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === "" || (parseInt(val) >= 1 && parseInt(val) <= 99)) {
+                                            setQuantity(val);
+                                        }
+                                    }}
+                                    className="text-center"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={incrementQuantity}
+                                    disabled={parseInt(quantity) >= 99}
+                                >
+                                    <ChevronUp className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </div>
-
                         <div className="flex justify-end gap-2 pt-4">
-                            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                                 إلغاء
                             </Button>
-                            <Button onClick={handleSubmit} className="bg-[#0083d3] hover:bg-[#0083d3]/90">
-                                {editingPromocode ? "تحديث" : "إنشاء"}
+                            <Button 
+                                onClick={handleCreateCodes} 
+                                disabled={isCreating || !selectedCourse}
+                                className="bg-[#005bd3] hover:bg-[#005bd3]/90"
+                            >
+                                {isCreating ? "جاري الإنشاء..." : "إنشاء الأكواد"}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Code Dialog */}
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>تعديل الكود</DialogTitle>
+                        <DialogDescription>
+                            قم بتعديل الكورس المرتبط بهذا الكود
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                            <Label>الكود</Label>
+                            <Input
+                                value={editingPromocode?.code || ""}
+                                readOnly
+                                className="font-mono font-bold text-center bg-muted"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="editCourse">الكورس</Label>
+                            <Select value={editCourseId} onValueChange={setEditCourseId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="اختر الكورس" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">لا يوجد</SelectItem>
+                                    {courses.map((course) => (
+                                        <SelectItem key={course.id} value={course.id}>
+                                            {course.title}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                                إلغاء
+                            </Button>
+                            <Button 
+                                onClick={handleUpdate} 
+                                disabled={isUpdating}
+                                className="bg-[#005bd3] hover:bg-[#005bd3]/90"
+                            >
+                                {isUpdating ? "جاري التحديث..." : "تحديث"}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Bulk Delete Dialog */}
+            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>حذف الأكواد</DialogTitle>
+                        <DialogDescription>
+                            اختر الكورس لحذف جميع أكواده
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="deleteCourse">الكورس</Label>
+                            <Select value={deleteCourseId} onValueChange={setDeleteCourseId}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">جميع الكورسات</SelectItem>
+                                    {courses.map((course) => (
+                                        <SelectItem key={course.id} value={course.id}>
+                                            {course.title}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                                إلغاء
+                            </Button>
+                            <Button 
+                                onClick={handleBulkDelete} 
+                                disabled={isDeleting}
+                                variant="destructive"
+                            >
+                                {isDeleting ? "جاري الحذف..." : "حذف"}
                             </Button>
                         </div>
                     </div>

@@ -127,11 +127,57 @@ export async function PATCH(
         if (validFrom !== undefined) updateData.validFrom = validFrom ? new Date(validFrom) : null;
         if (validUntil !== undefined) updateData.validUntil = validUntil ? new Date(validUntil) : null;
         if (description !== undefined) updateData.description = description || null;
+        if (body.courseId !== undefined) {
+            if (body.courseId) {
+                // Verify course exists
+                const course = await db.course.findUnique({
+                    where: { id: body.courseId },
+                });
+                if (!course) {
+                    return new NextResponse(
+                        JSON.stringify({ error: "الكورس غير موجود" }),
+                        { status: 400, headers: { "Content-Type": "application/json" } }
+                    );
+                }
+                updateData.courseId = body.courseId;
+            } else {
+                updateData.courseId = null;
+            }
+        }
 
-        const promocode = await db.promoCode.update({
-            where: { id: resolvedParams.promocodeId },
-            data: updateData,
-        });
+        // Try to update with course relation, fallback to without if relation doesn't exist
+        let promocode;
+        try {
+            promocode = await db.promoCode.update({
+                where: { id: resolvedParams.promocodeId },
+                data: updateData,
+                include: {
+                    course: {
+                        select: {
+                            id: true,
+                            title: true,
+                        },
+                    },
+                },
+            });
+        } catch (error) {
+            // If relation doesn't exist (migration not run), update without include
+            if (error instanceof Error && (
+                error.message.includes("Unknown arg") ||
+                error.message.includes("relation") ||
+                error.message.includes("courseId")
+            )) {
+                console.warn("[PROMOCODE_PATCH] Course relation not available, updating without include. Please run migration.");
+                promocode = await db.promoCode.update({
+                    where: { id: resolvedParams.promocodeId },
+                    data: updateData,
+                });
+                // Add null course for consistency
+                promocode = { ...promocode, course: null };
+            } else {
+                throw error;
+            }
+        }
 
         return NextResponse.json(promocode);
     } catch (error) {

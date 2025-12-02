@@ -7,15 +7,15 @@ export async function POST(req: NextRequest) {
     try {
         const { userId } = await auth();
         const body = await req.json();
-        const { code, coursePrice } = body;
+        const { code, coursePrice, courseId } = body;
 
         if (!userId) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        if (!code || !coursePrice) {
+        if (!code || !coursePrice || !courseId) {
             return new NextResponse(
-                JSON.stringify({ error: "رمز الكوبون وسعر الكورس مطلوبان" }),
+                JSON.stringify({ error: "رمز الكوبون وسعر الكورس ومعرف الكورس مطلوبة" }),
                 { status: 400, headers: { "Content-Type": "application/json" } }
             );
         }
@@ -40,6 +40,14 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // Check if code matches the course
+        if (promocode.courseId && promocode.courseId !== courseId) {
+            return new NextResponse(
+                JSON.stringify({ error: "هذا الكود غير صالح لهذا الكورس" }),
+                { status: 400, headers: { "Content-Type": "application/json" } }
+            );
+        }
+
         // Check validity dates
         const now = new Date();
         if (promocode.validFrom && new Date(promocode.validFrom) > now) {
@@ -56,10 +64,18 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Check usage limit
+        // Check usage limit (for single-use codes, usedCount should be 0)
         if (promocode.usageLimit && promocode.usedCount >= promocode.usageLimit) {
             return new NextResponse(
                 JSON.stringify({ error: "تم استنفاذ عدد مرات استخدام هذا الكوبون" }),
+                { status: 400, headers: { "Content-Type": "application/json" } }
+            );
+        }
+
+        // For single-use codes (usageLimit = 1), check if already used
+        if (promocode.usageLimit === 1 && promocode.usedCount > 0) {
+            return new NextResponse(
+                JSON.stringify({ error: "تم استخدام هذا الكود مسبقاً" }),
                 { status: 400, headers: { "Content-Type": "application/json" } }
             );
         }

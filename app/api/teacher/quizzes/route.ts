@@ -65,7 +65,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
     try {
         const { userId, user } = await auth();
-        const { title, description, courseId, questions, position, timer, maxAttempts } = await req.json();
+        const { title, description, courseId, questions, position, timer, maxAttempts, isFree } = await req.json();
 
         console.log("Received position:", position, "Type:", typeof position);
 
@@ -207,7 +207,8 @@ export async function POST(req: Request) {
             courseId,
             timer: timer || null,
             maxAttempts: finalMaxAttempts, // Use provided maxAttempts or default to 1
-            isPublished: true
+            isPublished: true,
+            isFree: isFree !== undefined ? Boolean(isFree) : false
         };
         
         console.log("Quiz data without questions:", JSON.stringify(quizDataWithoutQuestions, null, 2));

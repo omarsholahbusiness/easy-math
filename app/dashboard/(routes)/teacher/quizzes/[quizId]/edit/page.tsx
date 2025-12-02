@@ -34,6 +34,7 @@ interface Quiz {
     courseId: string;
     position: number;
     isPublished: boolean;
+    isFree: boolean;
     course: {
         title: string;
     };
@@ -77,6 +78,7 @@ const EditQuizPage = () => {
     const [quizDescription, setQuizDescription] = useState("");
     const [quizTimer, setQuizTimer] = useState<number | null>(null);
     const [maxAttempts, setMaxAttempts] = useState<number>(1);
+    const [isFree, setIsFree] = useState<boolean>(false);
     const [questions, setQuestions] = useState<Question[]>([]);
     const [selectedPosition, setSelectedPosition] = useState<number>(1);
     const [courseItems, setCourseItems] = useState<CourseItem[]>([]);
@@ -123,6 +125,7 @@ const EditQuizPage = () => {
                 setQuizDescription(quiz.description);
                 setQuizTimer(quiz.timer || null);
                 setMaxAttempts(quiz.maxAttempts || 1);
+                setIsFree(quiz.isFree || false);
                 setSelectedCourse(quiz.courseId);
                 
                 // Convert stored string correctAnswer values back to indices for multiple choice questions
@@ -379,6 +382,7 @@ const EditQuizPage = () => {
                     position: selectedPosition,
                     timer: quizTimer,
                     maxAttempts: maxAttempts,
+                    isFree: isFree,
                 }),
             });
 
@@ -654,6 +658,23 @@ const EditQuizPage = () => {
                         />
                         <p className="text-sm text-muted-foreground">
                             عدد المرات التي يمكن للطالب محاولة الاختبار
+                        </p>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="flex items-center space-x-2 space-y-0">
+                            <input
+                                type="checkbox"
+                                id="isFree"
+                                checked={isFree}
+                                onChange={(e) => setIsFree(e.target.checked)}
+                                className="w-4 h-4"
+                            />
+                            <Label htmlFor="isFree" className="cursor-pointer">
+                                اختبار مجاني
+                            </Label>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                            قم بالتحقق من هذا المربع إذا أردت جعل هذا الاختبار مجانيًا (يمكن للطلاب الوصول إليه بدون شراء الكورس)
                         </p>
                     </div>
                 </div>

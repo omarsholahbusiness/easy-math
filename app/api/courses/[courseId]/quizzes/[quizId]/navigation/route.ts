@@ -7,28 +7,17 @@ export async function GET(
     { params }: { params: Promise<{ courseId: string; quizId: string }> }
 ) {
     try {
-        const { userId } = await auth();
+        const { userId, user } = await auth();
         const resolvedParams = await params;
 
         if (!userId) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        // Check if user has access to the course
-        const purchase = await db.purchase.findUnique({
-            where: {
-                userId_courseId: {
-                    userId,
-                    courseId: resolvedParams.courseId
-                }
-            }
-        });
+        // Teachers and admins have access without purchase
+        const isStaff = user?.role === "TEACHER" || user?.role === "ADMIN";
 
-        if (!purchase) {
-            return new NextResponse("Course access required", { status: 403 });
-        }
-
-        // Get the current quiz
+        // Get the current quiz first to check if it's free
         const quiz = await db.quiz.findFirst({
             where: {
                 id: resolvedParams.quizId,
@@ -39,6 +28,22 @@ export async function GET(
 
         if (!quiz) {
             return new NextResponse("Quiz not found", { status: 404 });
+        }
+
+        // Check if user has access to the course (unless they're staff or quiz is free)
+        if (!isStaff && !quiz.isFree) {
+            const purchase = await db.purchase.findUnique({
+                where: {
+                    userId_courseId: {
+                        userId,
+                        courseId: resolvedParams.courseId
+                    }
+                }
+            });
+
+            if (!purchase) {
+                return new NextResponse("Course access required", { status: 403 });
+            }
         }
 
         // Get all content (chapters and quizzes) for this course
@@ -101,7 +106,15 @@ export async function GET(
 
         return NextResponse.json(response);
     } catch (error) {
-        console.log("[QUIZ_NAVIGATION_GET]", error);
+        console.error("[QUIZ_NAVIGATION_GET] Error details:", error);
+        if (error instanceof Error) {
+            console.error("[QUIZ_NAVIGATION_GET] Error message:", error.message);
+            console.error("[QUIZ_NAVIGATION_GET] Error stack:", error.stack);
+            return new NextResponse(
+                JSON.stringify({ error: error.message }),
+                { status: 500, headers: { "Content-Type": "application/json" } }
+            );
+        }
         return new NextResponse("Internal Error", { status: 500 });
     }
 } 

@@ -15,21 +15,7 @@ export async function GET(
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        // Check if user has access to the course
-        const purchase = await db.purchase.findUnique({
-            where: {
-                userId_courseId: {
-                    userId,
-                    courseId: resolvedParams.courseId
-                }
-            }
-        });
-
-        if (!purchase) {
-            return new NextResponse("Course access required", { status: 403 });
-        }
-
-        // Get the quiz
+        // Get the quiz first to check if it's free
         const quiz = await db.quiz.findFirst({
             where: {
                 id: resolvedParams.quizId,
@@ -58,6 +44,22 @@ export async function GET(
 
         if (!quiz) {
             return new NextResponse("Quiz not found", { status: 404 });
+        }
+
+        // Check if user has access to the course (unless quiz is free)
+        if (!quiz.isFree) {
+            const purchase = await db.purchase.findUnique({
+                where: {
+                    userId_courseId: {
+                        userId,
+                        courseId: resolvedParams.courseId
+                    }
+                }
+            });
+
+            if (!purchase) {
+                return new NextResponse("Course access required", { status: 403 });
+            }
         }
 
         // Check if user has already taken this quiz and if they can take it again
@@ -133,7 +135,15 @@ export async function GET(
 
         return NextResponse.json(quizWithAttemptInfo);
     } catch (error) {
-        console.log("[QUIZ_GET]", error);
+        console.error("[QUIZ_GET] Error details:", error);
+        if (error instanceof Error) {
+            console.error("[QUIZ_GET] Error message:", error.message);
+            console.error("[QUIZ_GET] Error stack:", error.stack);
+            return new NextResponse(
+                JSON.stringify({ error: error.message }),
+                { status: 500, headers: { "Content-Type": "application/json" } }
+            );
+        }
         return new NextResponse("Internal Error", { status: 500 });
     }
 }

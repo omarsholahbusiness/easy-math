@@ -72,6 +72,11 @@ export async function POST(
       });
 
       if (promocode && promocode.isActive) {
+        // Check if code matches the course
+        if (promocode.courseId && promocode.courseId !== resolvedParams.courseId) {
+          return new NextResponse("هذا الكود غير صالح لهذا الكورس", { status: 400 });
+        }
+
         const now = new Date();
         const isValidDate = 
           (!promocode.validFrom || new Date(promocode.validFrom) <= now) &&
