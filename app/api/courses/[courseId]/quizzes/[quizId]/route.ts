@@ -46,18 +46,36 @@ export async function GET(
             return new NextResponse("Quiz not found", { status: 404 });
         }
 
-        // Check if user has access to the course (unless quiz is free)
+        // Check if user has access to the course (unless quiz is free or course is free)
         if (!quiz.isFree) {
-            const purchase = await db.purchase.findUnique({
+            // Get course to check if it's free
+            const course = await db.course.findUnique({
                 where: {
-                    userId_courseId: {
-                        userId,
-                        courseId: resolvedParams.courseId
-                    }
+                    id: resolvedParams.courseId
+                },
+                select: {
+                    price: true
                 }
             });
 
-            if (!purchase) {
+            // Free courses (price === 0 or null) are always accessible
+            let hasAccess = false;
+            if (course && (course.price === null || course.price === 0)) {
+                hasAccess = true; // Free course
+            } else {
+                const purchase = await db.purchase.findUnique({
+                    where: {
+                        userId_courseId: {
+                            userId,
+                            courseId: resolvedParams.courseId
+                        },
+                        status: "ACTIVE"
+                    }
+                });
+                hasAccess = !!purchase;
+            }
+
+            if (!hasAccess) {
                 return new NextResponse("Course access required", { status: 403 });
             }
         }

@@ -16,21 +16,7 @@ export async function POST(
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        // Check if user has access to the course
-        const purchase = await db.purchase.findUnique({
-            where: {
-                userId_courseId: {
-                    userId,
-                    courseId: resolvedParams.courseId
-                }
-            }
-        });
-
-        if (!purchase) {
-            return new NextResponse("Course access required", { status: 403 });
-        }
-
-        // Get the quiz with questions
+        // Get the quiz with questions first to check if it's free
         const quiz = await db.quiz.findFirst({
             where: {
                 id: resolvedParams.quizId,
@@ -57,6 +43,45 @@ export async function POST(
 
         if (!quiz) {
             return new NextResponse("Quiz not found", { status: 404 });
+        }
+
+        // Check if user has access to the course
+        // If quiz is free (isFree === true), all students have access regardless of purchase
+        if (!quiz.isFree) {
+            // Get course to check if it's free
+            const course = await db.course.findUnique({
+                where: {
+                    id: resolvedParams.courseId
+                },
+                select: {
+                    price: true
+                }
+            });
+
+            if (!course) {
+                return new NextResponse("Course not found", { status: 404 });
+            }
+
+            // Free courses (price === 0 or null) are always accessible
+            let hasAccess = false;
+            if (course.price === null || course.price === 0) {
+                hasAccess = true; // Free course
+            } else {
+                const purchase = await db.purchase.findUnique({
+                    where: {
+                        userId_courseId: {
+                            userId,
+                            courseId: resolvedParams.courseId
+                        },
+                        status: "ACTIVE"
+                    }
+                });
+                hasAccess = !!purchase;
+            }
+
+            if (!hasAccess) {
+                return new NextResponse("Course access required", { status: 403 });
+            }
         }
 
         // Check if user has already taken this quiz and if they can take it again

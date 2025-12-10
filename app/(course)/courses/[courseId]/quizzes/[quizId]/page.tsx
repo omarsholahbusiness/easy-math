@@ -162,6 +162,8 @@ export default function QuizPage({
             if (response.ok) {
                 const result = await response.json();
                 toast.success("تم إرسال الاختبار بنجاح!");
+                // Add a small delay to ensure quizResult is saved in database before navigating
+                await new Promise(resolve => setTimeout(resolve, 500));
                 router.push(`/courses/${courseId}/quizzes/${quizId}/result`);
             } else {
                 const error = await response.text();

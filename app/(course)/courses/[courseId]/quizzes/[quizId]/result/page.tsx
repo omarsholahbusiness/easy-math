@@ -89,10 +89,31 @@ export default function QuizResultPage({
                     setCanRetry(false);
                 }
             } else {
-                console.error("Error fetching result");
+                let errorMessage = "حدث خطأ أثناء تحميل النتيجة";
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorMessage;
+                } catch {
+                    const errorText = await response.text();
+                    errorMessage = errorText || errorMessage;
+                }
+                console.error("Error fetching result:", response.status, errorMessage);
+                toast.error(errorMessage);
+                // Redirect to quiz page if result not found
+                if (response.status === 404) {
+                    setTimeout(() => {
+                        router.push(`/courses/${courseId}/quizzes/${quizId}`);
+                    }, 2000);
+                } else if (response.status === 403) {
+                    setTimeout(() => {
+                        router.push(`/courses/${courseId}`);
+                    }, 2000);
+                }
             }
         } catch (error) {
             console.error("Error fetching result:", error);
+            const errorMessage = error instanceof Error ? error.message : "حدث خطأ غير معروف";
+            toast.error(`حدث خطأ أثناء تحميل النتيجة: ${errorMessage}`);
         } finally {
             setLoading(false);
         }
