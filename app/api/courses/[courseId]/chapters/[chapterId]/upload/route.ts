@@ -7,22 +7,25 @@ export async function POST(
     { params }: { params: Promise<{ courseId: string; chapterId: string }> }
 ) {
     try {
-        const { userId } = await auth();
+        const { userId, user } = await auth();
         const resolvedParams = await params;
 
         if (!userId) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        const courseOwner = await db.course.findUnique({
-            where: {
-                id: resolvedParams.courseId,
-                userId,
-            }
-        });
+        // Admins can edit any course, teachers can only edit their own courses
+        if (user?.role !== "ADMIN") {
+            const courseOwner = await db.course.findUnique({
+                where: {
+                    id: resolvedParams.courseId,
+                    userId,
+                }
+            });
 
-        if (!courseOwner) {
-            return new NextResponse("Unauthorized", { status: 401 });
+            if (!courseOwner) {
+                return new NextResponse("Unauthorized", { status: 401 });
+            }
         }
 
         const { url } = await req.json();

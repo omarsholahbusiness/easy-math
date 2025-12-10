@@ -30,34 +30,34 @@ export async function GET(req: NextRequest) {
         // Teachers can see all users (USER, TEACHER, and ADMIN roles)
         const [users, total] = await Promise.all([
             db.user.findMany({
-                where: {
-                    role: {
-                        in: ["USER", "TEACHER", "ADMIN"]
+            where: {
+                role: {
+                    in: ["USER", "TEACHER", "ADMIN"]
+                }
+            },
+            select: {
+                id: true,
+                fullName: true,
+                phoneNumber: true,
+                parentPhoneNumber: true,
+                role: true,
+                balance: true,
+                grade: true,
+                division: true,
+                studyType: true,
+                governorate: true,
+                createdAt: true,
+                updatedAt: true,
+                _count: {
+                    select: {
+                        courses: true,
+                        purchases: true,
+                        userProgress: true
                     }
-                },
-                select: {
-                    id: true,
-                    fullName: true,
-                    phoneNumber: true,
-                    parentPhoneNumber: true,
-                    role: true,
-                    balance: true,
-                    grade: true,
-                    division: true,
-                    studyType: true,
-                    governorate: true,
-                    createdAt: true,
-                    updatedAt: true,
-                    _count: {
-                        select: {
-                            courses: true,
-                            purchases: true,
-                            userProgress: true
-                        }
-                    }
-                },
-                orderBy: {
-                    createdAt: "desc"
+                }
+            },
+            orderBy: {
+                createdAt: "desc"
                 },
                 skip,
                 take

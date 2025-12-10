@@ -79,8 +79,8 @@ export async function GET(
         ],
         // Filter by access: free sessions OR user has access
         ...(hasAccess
-          ? [] // If user has access, show all (free and paid)
-          : [{ isFree: true }]), // If no access, only show free sessions
+          ? {} // If user has access, show all (free and paid)
+          : { isFree: true }), // If no access, only show free sessions
       },
       include: {
         chapter: {
@@ -124,7 +124,12 @@ export async function GET(
     return NextResponse.json(livestreamsWithStatus);
   } catch (error) {
     console.error("[CHAPTER_LIVESTREAMS_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("[CHAPTER_LIVESTREAMS_GET] Error details:", errorMessage);
+    return new NextResponse(
+      JSON.stringify({ error: "Internal Error", message: errorMessage }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
   }
 }
 

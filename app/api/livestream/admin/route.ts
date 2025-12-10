@@ -50,7 +50,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(livestreams);
   } catch (error) {
     console.error("[LIVESTREAM_ADMIN_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("[LIVESTREAM_ADMIN_GET] Error details:", errorMessage);
+    return new NextResponse(
+      JSON.stringify({ error: "Internal Error", message: errorMessage }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
   }
 }
 

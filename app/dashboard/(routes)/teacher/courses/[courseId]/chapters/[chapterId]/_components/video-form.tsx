@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Video, Pencil, Upload, Youtube, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,14 @@ export const VideoForm = ({
     const [isMounted, setIsMounted] = useState(false);
     const [youtubeUrl, setYoutubeUrl] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // Local state to track video data (updated immediately after adding)
+    const [videoData, setVideoData] = useState(initialData);
     const router = useRouter();
+
+    // Update local state when initialData changes
+    useEffect(() => {
+        setVideoData(initialData);
+    }, [initialData]);
 
     useEffect(() => {
         setIsMounted(true);
@@ -51,6 +58,13 @@ export const VideoForm = ({
                 throw new Error('Failed to upload video');
             }
 
+            const responseData = await response.json();
+            // Update local state immediately with the new video data
+            setVideoData({
+                videoUrl: responseData.url || url,
+                videoType: "UPLOAD",
+                youtubeVideoId: null
+            });
             toast.success("تم رفع الفيديو بنجاح");
             setIsEditing(false);
             router.refresh();
@@ -83,6 +97,13 @@ export const VideoForm = ({
                 throw new Error(error || 'Failed to add YouTube video');
             }
 
+            const responseData = await response.json();
+            // Update local state immediately with the new video data
+            setVideoData({
+                videoUrl: responseData.url || youtubeUrl,
+                videoType: "YOUTUBE",
+                youtubeVideoId: responseData.youtubeVideoId || null
+            });
             toast.success("تم إضافة فيديو YouTube بنجاح");
             setIsEditing(false);
             setYoutubeUrl("");
@@ -94,6 +115,20 @@ export const VideoForm = ({
             setIsSubmitting(false);
         }
     }
+
+    // Create a stable key for the video player
+    const videoPlayerKey = useMemo(() => {
+        if (videoData.videoType === "YOUTUBE" && videoData.youtubeVideoId) {
+            return `youtube-${chapterId}-${videoData.youtubeVideoId}`;
+        }
+        if (videoData.videoUrl) {
+            return `upload-${chapterId}-${videoData.videoUrl}`;
+        }
+        return null;
+    }, [chapterId, videoData.videoType, videoData.youtubeVideoId, videoData.videoUrl]);
+
+    // Check if video exists
+    const hasVideo = videoData.videoUrl || (videoData.videoType === "YOUTUBE" && videoData.youtubeVideoId);
 
     if (!isMounted) {
         return null;
@@ -117,24 +152,14 @@ export const VideoForm = ({
             
             {!isEditing && (
                 <div className="relative aspect-video mt-2">
-                    {initialData.videoUrl ? (
-                        (() => {
-                            console.log("🔍 VideoForm rendering PlyrVideoPlayer with:", {
-                                videoUrl: initialData.videoUrl,
-                                videoType: initialData.videoType,
-                                youtubeVideoId: initialData.youtubeVideoId,
-                                isUpload: initialData.videoType === "UPLOAD",
-                                isYouTube: initialData.videoType === "YOUTUBE"
-                            });
-                            return (
-                                <PlyrVideoPlayer
-                                    videoUrl={initialData.videoType === "UPLOAD" ? initialData.videoUrl : undefined}
-                                    youtubeVideoId={initialData.videoType === "YOUTUBE" ? initialData.youtubeVideoId || undefined : undefined}
-                                    videoType={(initialData.videoType as "UPLOAD" | "YOUTUBE") || "UPLOAD"}
-                                    className="w-full h-full"
-                                />
-                            );
-                        })()
+                    {hasVideo && videoPlayerKey ? (
+                        <PlyrVideoPlayer
+                            key={videoPlayerKey}
+                            videoUrl={videoData.videoType === "UPLOAD" ? videoData.videoUrl : undefined}
+                            youtubeVideoId={videoData.videoType === "YOUTUBE" ? videoData.youtubeVideoId || undefined : undefined}
+                            videoType={(videoData.videoType as "UPLOAD" | "YOUTUBE") || "UPLOAD"}
+                            className="w-full h-full"
+                        />
                     ) : (
                         <div className="flex items-center justify-center h-full bg-muted rounded-md">
                             <Video className="h-8 w-8 text-muted-foreground" />

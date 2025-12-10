@@ -67,7 +67,9 @@ const LivestreamPage = () => {
                 const data = await response.json();
                 setSessions(data);
             } else {
-                toast.error("حدث خطأ في تحميل الجلسات");
+                const errorData = await response.json().catch(() => ({ message: "حدث خطأ في تحميل الجلسات" }));
+                console.error("Error fetching sessions:", errorData);
+                toast.error(errorData.message || "حدث خطأ في تحميل الجلسات");
             }
         } catch (error) {
             console.error("Error fetching sessions:", error);

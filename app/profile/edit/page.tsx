@@ -109,7 +109,15 @@ export default function EditProfilePage() {
       });
 
       toast.success("تم تحديث الملف الشخصي بنجاح");
-      router.back();
+      
+      // Refresh the router to update server components with new data
+      router.refresh();
+      
+      // Redirect to dashboard/search to see updated courses
+      // Use a small delay to ensure the refresh happens first
+      setTimeout(() => {
+        router.push("/dashboard/search");
+      }, 300);
     } catch (error) {
       console.error("Error updating profile:", error);
       if (axios.isAxiosError(error)) {
