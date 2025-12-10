@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import "plyr/dist/plyr.css";
 
 interface PlyrVideoPlayerProps {
@@ -23,6 +23,7 @@ export const PlyrVideoPlayer = ({
   const html5VideoRef = useRef<HTMLVideoElement>(null);
   const youtubeEmbedRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
+  const [useIframeFallback, setUseIframeFallback] = useState(false);
 
   const YOUTUBE_QUALITY_LABEL_MAP: Record<
     string,
@@ -52,59 +53,62 @@ export const PlyrVideoPlayer = ({
 
   // Initialize Plyr on mount/update and destroy on unmount
   useEffect(() => {
+    // reset fallback when source changes
+    setUseIframeFallback(false);
     let isCancelled = false;
 
     async function setupPlayer() {
-      const targetEl =
-        videoType === "YOUTUBE" ? youtubeEmbedRef.current : html5VideoRef.current;
-      if (!targetEl) return;
+      try {
+        const targetEl =
+          videoType === "YOUTUBE" ? youtubeEmbedRef.current : html5VideoRef.current;
+        if (!targetEl) return;
 
-      // Dynamically import Plyr to be SSR-safe
-      const plyrModule: any = await import("plyr");
-      const Plyr: any = plyrModule.default ?? plyrModule;
+        // Dynamically import Plyr to be SSR-safe
+        const plyrModule: any = await import("plyr");
+        const Plyr: any = plyrModule.default ?? plyrModule;
 
-      if (isCancelled) return;
+        if (isCancelled) return;
 
-      // Destroy any previous instance
-      if (playerRef.current && typeof playerRef.current.destroy === "function") {
-        playerRef.current.destroy();
-        playerRef.current = null;
-      }
+        // Destroy any previous instance
+        if (playerRef.current && typeof playerRef.current.destroy === "function") {
+          playerRef.current.destroy();
+          playerRef.current = null;
+        }
 
-      const player = new Plyr(targetEl, {
-        controls: [
-          "play-large",
-          "play",
-          "progress",
-          "current-time",
-          "duration",
-          "mute",
-          "volume",
-          "captions",
-          "settings",
-          "pip",
-          "airplay",
-          "fullscreen"
-        ],
-        settings: ["speed", "quality", "loop"],
-        quality: {
-          default: 720,
-          options: [4320, 2880, 2160, 1440, 1080, 720, 576, 480, 360, 240, 144],
-          forced: true
-        },
-        speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
-        youtube: {
-          rel: 0,
-          modestbranding: 1,
-          controls: 0,
-          iv_load_policy: 3,
-          disablekb: 1,
-          playsinline: 1
-        },
-        ratio: "16:9"
-      });
+        const player = new Plyr(targetEl, {
+          controls: [
+            "play-large",
+            "play",
+            "progress",
+            "current-time",
+            "duration",
+            "mute",
+            "volume",
+            "captions",
+            "settings",
+            "pip",
+            "airplay",
+            "fullscreen"
+          ],
+          settings: ["speed", "quality", "loop"],
+          quality: {
+            default: 720,
+            options: [4320, 2880, 2160, 1440, 1080, 720, 576, 480, 360, 240, 144],
+            forced: true
+          },
+          speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
+          youtube: {
+            rel: 0,
+            modestbranding: 1,
+            controls: 0,
+            iv_load_policy: 3,
+            disablekb: 1,
+            playsinline: 1
+          },
+          ratio: "16:9"
+        });
 
-      playerRef.current = player;
+        playerRef.current = player;
 
       const getYoutubeEmbedInstance = () => {
         return player?.media?.plyr?.embed ?? null;
@@ -313,34 +317,45 @@ export const PlyrVideoPlayer = ({
         return button;
       };
 
-      if (videoType === "YOUTUBE") {
-        player.on("ready", () => {
+        if (videoType === "YOUTUBE") {
+          player.on("ready", () => {
+            disableYoutubeOverlayInteraction();
+            updateYoutubeQualityMenu();
+          });
           disableYoutubeOverlayInteraction();
           updateYoutubeQualityMenu();
-        });
-        disableYoutubeOverlayInteraction();
-        updateYoutubeQualityMenu();
 
-        player.on("loadeddata", updateYoutubeQualityMenu);
-        player.on("qualitychange", () => {
-          const embed = getYoutubeEmbedInstance();
-          if (!embed) return;
+          player.on("loadeddata", updateYoutubeQualityMenu);
+          player.on("qualitychange", () => {
+            const embed = getYoutubeEmbedInstance();
+            if (!embed) return;
 
-          const desiredQuality =
-            QUALITY_VALUE_TO_YOUTUBE[player.quality] ?? null;
+            const desiredQuality =
+              QUALITY_VALUE_TO_YOUTUBE[player.quality] ?? null;
 
-          if (
-            desiredQuality &&
-            typeof embed.setPlaybackQuality === "function"
-          ) {
-            embed.setPlaybackQuality(desiredQuality);
-          }
-        });
+            if (
+              desiredQuality &&
+              typeof embed.setPlaybackQuality === "function"
+            ) {
+              embed.setPlaybackQuality(desiredQuality);
+            }
+          });
+
+          player.on("error", (e: any) => {
+            console.error("Plyr YouTube error, enabling iframe fallback:", e);
+            setUseIframeFallback(true);
+          });
+        }
+
+        if (onEnded) player.on("ended", onEnded);
+        if (onTimeUpdate)
+          player.on("timeupdate", () => onTimeUpdate(player.currentTime || 0));
+      } catch (error) {
+        console.error("Plyr setup failed, enabling iframe fallback:", error);
+        if (videoType === "YOUTUBE") {
+          setUseIframeFallback(true);
+        }
       }
-
-      if (onEnded) player.on("ended", onEnded);
-      if (onTimeUpdate)
-        player.on("timeupdate", () => onTimeUpdate(player.currentTime || 0));
     }
 
     setupPlayer();
@@ -352,7 +367,7 @@ export const PlyrVideoPlayer = ({
       }
       playerRef.current = null;
     };
-  }, [videoUrl, youtubeVideoId, videoType, onEnded, onTimeUpdate]);
+  }, [videoUrl, youtubeVideoId, videoType, onEnded, onTimeUpdate, useIframeFallback]);
 
   const hasVideo = (videoType === "YOUTUBE" && !!youtubeVideoId) || !!videoUrl;
 
@@ -367,12 +382,21 @@ export const PlyrVideoPlayer = ({
   return (
     <div className={`aspect-video ${className || ""}`}>
       {videoType === "YOUTUBE" && youtubeVideoId ? (
-        <div
-          ref={youtubeEmbedRef}
-          data-plyr-provider="youtube"
-          data-plyr-embed-id={youtubeVideoId}
-          className="w-full h-full"
-        />
+        useIframeFallback ? (
+          <iframe
+            className="w-full h-full"
+            src={`https://www.youtube.com/embed/${youtubeVideoId}`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        ) : (
+          <div
+            ref={youtubeEmbedRef}
+            data-plyr-provider="youtube"
+            data-plyr-embed-id={youtubeVideoId}
+            className="w-full h-full"
+          />
+        )
       ) : (
         <video ref={html5VideoRef} className="w-full h-full" playsInline crossOrigin="anonymous">
           {videoUrl ? <source src={videoUrl} type="video/mp4" /> : null}
