@@ -16,15 +16,15 @@ export async function POST(
 
         // Admins can edit any course, teachers can only edit their own courses
         if (user?.role !== "ADMIN") {
-            const courseOwner = await db.course.findUnique({
-                where: {
-                    id: resolvedParams.courseId,
-                    userId,
-                }
-            });
+        const courseOwner = await db.course.findUnique({
+            where: {
+                id: resolvedParams.courseId,
+                userId,
+            }
+        });
 
-            if (!courseOwner) {
-                return new NextResponse("Unauthorized", { status: 401 });
+        if (!courseOwner) {
+            return new NextResponse("Unauthorized", { status: 401 });
             }
         }
 
@@ -70,15 +70,15 @@ export async function DELETE(
 
         // Admins can edit any course, teachers can only edit their own courses
         if (user?.role !== "ADMIN") {
-            const courseOwner = await db.course.findUnique({
-                where: {
-                    id: resolvedParams.courseId,
-                    userId,
-                }
-            });
+        const courseOwner = await db.course.findUnique({
+            where: {
+                id: resolvedParams.courseId,
+                userId,
+            }
+        });
 
-            if (!courseOwner) {
-                return new NextResponse("Unauthorized", { status: 401 });
+        if (!courseOwner) {
+            return new NextResponse("Unauthorized", { status: 401 });
             }
         }
 

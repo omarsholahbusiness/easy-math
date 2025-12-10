@@ -67,6 +67,7 @@ export const VideoForm = ({
             });
             toast.success("تم رفع الفيديو بنجاح");
             setIsEditing(false);
+            // Refresh to update server-side data (revalidatePath in API ensures fresh data in Vercel)
             router.refresh();
         } catch (error) {
             console.error("[CHAPTER_VIDEO]", error);
@@ -107,6 +108,7 @@ export const VideoForm = ({
             toast.success("تم إضافة فيديو YouTube بنجاح");
             setIsEditing(false);
             setYoutubeUrl("");
+            // Refresh to update server-side data (revalidatePath in API ensures fresh data in Vercel)
             router.refresh();
         } catch (error) {
             console.error("[CHAPTER_YOUTUBE]", error);
@@ -153,13 +155,13 @@ export const VideoForm = ({
             {!isEditing && (
                 <div className="relative aspect-video mt-2">
                     {hasVideo && videoPlayerKey ? (
-                        <PlyrVideoPlayer
+                                <PlyrVideoPlayer
                             key={videoPlayerKey}
                             videoUrl={videoData.videoType === "UPLOAD" ? videoData.videoUrl : undefined}
                             youtubeVideoId={videoData.videoType === "YOUTUBE" ? videoData.youtubeVideoId || undefined : undefined}
                             videoType={(videoData.videoType as "UPLOAD" | "YOUTUBE") || "UPLOAD"}
-                            className="w-full h-full"
-                        />
+                                    className="w-full h-full"
+                                />
                     ) : (
                         <div className="flex items-center justify-center h-full bg-muted rounded-md">
                             <Video className="h-8 w-8 text-muted-foreground" />

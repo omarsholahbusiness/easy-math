@@ -304,15 +304,15 @@ const ChapterPage = () => {
           {/* Video Player Section */}
           <div className="aspect-video relative bg-black rounded-lg overflow-hidden">
             {!loading && videoPlayerKey ? (
-              <PlyrVideoPlayer
+                  <PlyrVideoPlayer
                 key={videoPlayerKey}
-                videoUrl={chapter.videoType === "UPLOAD" ? chapter.videoUrl : undefined}
-                youtubeVideoId={chapter.videoType === "YOUTUBE" ? chapter.youtubeVideoId || undefined : undefined}
-                videoType={(chapter.videoType as "UPLOAD" | "YOUTUBE") || "UPLOAD"}
-                className="w-full h-full"
-                onEnded={onEnd}
+                    videoUrl={chapter.videoType === "UPLOAD" ? chapter.videoUrl : undefined}
+                    youtubeVideoId={chapter.videoType === "YOUTUBE" ? chapter.youtubeVideoId || undefined : undefined}
+                    videoType={(chapter.videoType as "UPLOAD" | "YOUTUBE") || "UPLOAD"}
+                    className="w-full h-full"
+                    onEnded={onEnd}
                 onTimeUpdate={onTimeUpdate}
-              />
+                  />
             ) : !loading ? (
               <div className="absolute inset-0 flex items-center justify-center text-white">
                 لا يوجد فيديو متاح
