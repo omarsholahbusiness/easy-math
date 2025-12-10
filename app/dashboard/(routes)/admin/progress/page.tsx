@@ -78,7 +78,8 @@ const ProgressPage = () => {
             const response = await fetch("/api/admin/users");
             if (response.ok) {
                 const data = await response.json();
-                setUsers(data);
+                // Handle paginated response
+                setUsers(data.users || data);
             }
         } catch (error) {
             console.error("Error fetching users:", error);

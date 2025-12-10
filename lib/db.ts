@@ -15,16 +15,26 @@ function createPrismaClient() {
     const directDatabaseUrl = process.env.DIRECT_DATABASE_URL;
     const databaseUrl = process.env.DATABASE_URL;
 
-    if (accelerateUrl) {
+    // Use Edge client only in Edge runtimes, otherwise use Node client
+    if (isEdgeRuntime) {
+        if (!accelerateUrl) {
+            throw new Error("PRISMA_ACCELERATE_URL must be set in Edge runtimes.");
+        }
         return new PrismaClientEdge({
             datasourceUrl: accelerateUrl,
         }).$extends(withAccelerate());
     }
 
-    if (isEdgeRuntime) {
-        throw new Error("PRISMA_ACCELERATE_URL must be set in Edge runtimes.");
+    // For Node.js runtime, use PrismaClientNode with Accelerate if available
+    if (accelerateUrl) {
+        return new PrismaClientNode({
+            datasources: {
+                db: { url: accelerateUrl },
+            },
+        }).$extends(withAccelerate());
     }
 
+    // Fallback to direct connection with connection pooling
     const datasourceUrl = directDatabaseUrl ?? databaseUrl;
 
     if (!datasourceUrl) {

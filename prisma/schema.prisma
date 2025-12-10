@@ -51,6 +51,7 @@ model Course {
   purchases Purchase[]
   quizzes Quiz[]
   promoCodes PromoCode[]
+  liveSessions LiveSessionCourse[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -89,6 +90,7 @@ model Chapter {
 
   userProgress UserProgress[]
   attachments ChapterAttachment[] // New relation for multiple documents
+  liveSessions LiveSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -263,4 +265,38 @@ model PromoCode {
     @@index([code])
     @@index([isActive])
     @@index([courseId])
+}
+
+model LiveSession {
+  id String @id @default(uuid())
+  title String
+  description String? @db.Text
+  linkUrl String @db.Text
+  linkType String // "ZOOM" or "GOOGLE_MEET"
+  startDate DateTime
+  endDate DateTime?
+  isPublished Boolean @default(false)
+  isFree Boolean @default(false)
+  chapterId String?
+  chapter Chapter? @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  courses LiveSessionCourse[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([chapterId])
+  @@index([isPublished])
+  @@index([startDate])
+}
+
+model LiveSessionCourse {
+  id String @id @default(uuid())
+  liveSessionId String
+  courseId String
+  liveSession LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([liveSessionId, courseId])
+  @@index([liveSessionId])
+  @@index([courseId])
 }

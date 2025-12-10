@@ -71,8 +71,10 @@ const AddCoursesPage = () => {
             const response = await fetch("/api/admin/users");
             if (response.ok) {
                 const data = await response.json();
+                // Handle paginated response
+                const users = data.users || data;
                 // Filter only students
-                const studentUsers = data.filter((user: User) => user.role === "USER");
+                const studentUsers = users.filter((user: User) => user.role === "USER");
                 setUsers(studentUsers);
             }
         } catch (error) {

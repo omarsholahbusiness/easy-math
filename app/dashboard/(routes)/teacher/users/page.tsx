@@ -89,7 +89,8 @@ const UsersPage = () => {
             const response = await fetch("/api/teacher/users");
             if (response.ok) {
                 const data = await response.json();
-                setUsers(data);
+                // Handle paginated response
+                setUsers(data.users || data);
             } else {
                 console.error("Error fetching users:", response.status, response.statusText);
                 if (response.status === 403) {

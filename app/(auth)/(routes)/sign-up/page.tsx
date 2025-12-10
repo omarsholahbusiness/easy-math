@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,12 +17,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ReCaptchaV2 } from "@/components/recaptcha-v2";
 
 export default function SignUpPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [recaptchaSiteKey] = useState(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "");
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+  const [recaptchaError, setRecaptchaError] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
     phoneNumber: "",
@@ -102,6 +106,17 @@ export default function SignUpPage() {
 
   const passwordChecks = validatePasswords();
 
+  const handleRecaptchaVerify = (token: string) => {
+    console.log("[SIGNUP] reCAPTCHA verified, token received:", token ? "Yes" : "No");
+    setRecaptchaToken(token);
+    setRecaptchaError(false);
+  };
+
+  const handleRecaptchaExpire = () => {
+    setRecaptchaToken(null);
+    setRecaptchaError(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -112,8 +127,20 @@ export default function SignUpPage() {
       return;
     }
 
+    // Check reCAPTCHA if site key is configured
+    if (recaptchaSiteKey && !recaptchaToken) {
+      toast.error("يرجى التحقق من أنك لست روبوت");
+      setRecaptchaError(true);
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const response = await axios.post("/api/auth/register", formData);
+      // Proceed with registration (reCAPTCHA will be verified in the register endpoint)
+      const response = await axios.post("/api/auth/register", {
+        ...formData,
+        recaptchaToken, // Include token in registration request
+      });
       
       if (response.data.success) {
         toast.success("تم إنشاء الحساب بنجاح");
@@ -121,8 +148,13 @@ export default function SignUpPage() {
       }
     } catch (error) {
       const axiosError = error as AxiosError;
+      console.error("Registration error:", axiosError.response?.data || axiosError.message);
+      
       if (axiosError.response?.status === 400) {
-        const errorMessage = axiosError.response.data as string;
+        const errorMessage = typeof axiosError.response.data === 'string' 
+          ? axiosError.response.data 
+          : JSON.stringify(axiosError.response.data);
+          
         if (errorMessage.includes("Phone number already exists")) {
           toast.error("رقم الهاتف مسجل مسبقاً");
         } else if (errorMessage.includes("Parent phone number already exists")) {
@@ -131,8 +163,18 @@ export default function SignUpPage() {
           toast.error("رقم الهاتف لا يمكن أن يكون نفس رقم هاتف الوالد");
         } else if (errorMessage.includes("Passwords do not match")) {
           toast.error("كلمات المرور غير متطابقة");
+        } else if (errorMessage.includes("Missing required fields")) {
+          toast.error("يرجى ملء جميع الحقول المطلوبة");
+        } else if (errorMessage.includes("reCAPTCHA verification required")) {
+          toast.error("يرجى التحقق من أنك لست روبوت");
+          setRecaptchaToken(null);
+          setRecaptchaError(true);
+        } else if (errorMessage.includes("reCAPTCHA")) {
+          toast.error("فشل التحقق من أنك لست روبوت. يرجى المحاولة مرة أخرى");
+          setRecaptchaToken(null);
+          setRecaptchaError(true);
         } else {
-          toast.error("حدث خطأ أثناء إنشاء الحساب");
+          toast.error(`حدث خطأ أثناء إنشاء الحساب: ${errorMessage}`);
         }
       } else {
         toast.error("حدث خطأ أثناء إنشاء الحساب");
@@ -410,10 +452,28 @@ export default function SignUpPage() {
               </div>
             </div>
 
+            {/* reCAPTCHA v2 Checkbox */}
+            {recaptchaSiteKey && (
+              <div className="space-y-2">
+                {recaptchaError && (
+                  <p className="text-sm text-red-500 text-center">
+                    يرجى التحقق من أنك لست روبوت
+                  </p>
+                )}
+                <ReCaptchaV2
+                  siteKey={recaptchaSiteKey}
+                  onVerify={handleRecaptchaVerify}
+                  onExpire={handleRecaptchaExpire}
+                  theme="light"
+                  size="normal"
+                />
+              </div>
+            )}
+
             <Button
               type="submit"
               className="w-full h-10 bg-[#0083d3] hover:bg-[#0083d3]/90 text-white"
-              disabled={isLoading || !passwordChecks.isValid}
+              disabled={isLoading || !passwordChecks.isValid || (recaptchaSiteKey && !recaptchaToken)}
             >
               {isLoading ? "جاري إنشاء الحساب..." : "إنشاء حساب"}
             </Button>

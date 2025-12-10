@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback, use } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { CheckCircle, Circle } from "lucide-react";
+import { CheckCircle, Circle, Video } from "lucide-react";
 import axios from "axios";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 interface Chapter {
   id: string;
@@ -181,6 +182,20 @@ export const CourseSidebar = ({ course }: CourseSidebarProps) => {
             </div>
           );
         })}
+        <Link
+          href={`/courses/${course?.id || params.courseId}/live`}
+          className={cn(
+            "flex items-center gap-x-2 text-sm font-[500] rtl:pr-4 ltr:pl-4 py-4 transition cursor-pointer border-t",
+            pathname?.includes("/live")
+              ? "bg-slate-200 text-slate-900"
+              : "text-slate-500 hover:bg-slate-300/20 hover:text-slate-600"
+          )}
+        >
+          <Video className="h-4 w-4" />
+          <span className="rtl:text-right ltr:text-left flex-grow mr-1">
+            البث المباشر
+          </span>
+        </Link>
       </div>
     </div>
   );
