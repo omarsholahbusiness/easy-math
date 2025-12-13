@@ -86,7 +86,8 @@ const UsersPage = () => {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch("/api/admin/users");
+            // Fetch all users without pagination to ensure all admins/teachers are shown
+            const response = await fetch("/api/admin/users?all=true");
             if (response.ok) {
                 const data = await response.json();
                 // Handle paginated response

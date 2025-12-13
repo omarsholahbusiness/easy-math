@@ -17,12 +17,14 @@ export async function GET(req: NextRequest) {
 
         // Parse pagination parameters from query string
         const { searchParams } = new URL(req.url);
+        const fetchAll = searchParams.get("all") === "true";
         const page = parseInt(searchParams.get("page") || "1", 10);
         const limit = parseInt(searchParams.get("limit") || "100", 10);
         const skip = (page - 1) * limit;
 
-        // Limit the maximum page size to prevent large responses
-        const take = Math.min(limit, 100);
+        // If fetchAll is true, fetch all users without pagination
+        // Otherwise, limit the maximum page size to prevent large responses
+        const take = fetchAll ? undefined : Math.min(limit, 100);
 
         const [users, total] = await Promise.all([
             db.user.findMany({
@@ -50,8 +52,7 @@ export async function GET(req: NextRequest) {
                 orderBy: {
                     createdAt: "desc"
                 },
-                skip,
-                take
+                ...(take !== undefined ? { skip, take } : {})
             }),
             db.user.count()
         ]);
@@ -60,9 +61,9 @@ export async function GET(req: NextRequest) {
             users,
             pagination: {
                 page,
-                limit: take,
+                limit: take || total,
                 total,
-                totalPages: Math.ceil(total / take)
+                totalPages: take ? Math.ceil(total / take) : 1
             }
         });
     } catch (error) {
