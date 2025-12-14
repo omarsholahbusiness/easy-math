@@ -2,6 +2,9 @@ import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
+// Cache for 60 seconds (1 minute)
+export const revalidate = 60;
+
 export async function POST(req: Request) {
     try {
         const { userId } = await auth()
@@ -123,56 +126,61 @@ export async function GET(req: Request) {
     });
 
     if (includeProgress && userId) {
-      const coursesWithProgress = await Promise.all(
-        courses.map(async (course) => {
-          const totalChapters = course.chapters.length;
-          const totalQuizzes = course.quizzes.length;
-          const totalContent = totalChapters + totalQuizzes;
+      // OPTIMIZED: Batch all progress queries instead of N+1 queries
+      const allChapterIds = courses.flatMap(course => course.chapters.map(ch => ch.id));
+      const allQuizIds = courses.flatMap(course => course.quizzes.map(q => q.id));
 
-          let completedChapters = 0;
-          let completedQuizzes = 0;
+      // Single query for all completed chapters
+      const allCompletedChapters = await db.userProgress.findMany({
+        where: {
+          userId,
+          chapterId: { in: allChapterIds },
+          isCompleted: true
+        },
+        select: {
+          chapterId: true
+        }
+      });
 
-          if (course.purchases && course.purchases.length > 0) {
-            // Get completed chapters
-            completedChapters = await db.userProgress.count({
-              where: {
-                userId,
-                chapterId: {
-                  in: course.chapters.map(chapter => chapter.id)
-                },
-                isCompleted: true
-              }
-            });
+      // Single query for all completed quizzes
+      const allCompletedQuizzes = await db.quizResult.findMany({
+        where: {
+          studentId: userId,
+          quizId: { in: allQuizIds }
+        },
+        select: {
+          quizId: true
+        }
+      });
 
-            // Get completed quizzes
-            const completedQuizResults = await db.quizResult.findMany({
-                where: {
-                    studentId: userId,
-                    quizId: {
-                        in: course.quizzes.map(quiz => quiz.id)
-                    }
-                },
-                select: {
-                    quizId: true
-                }
-            });
+      // Create sets for fast lookup
+      const completedChapterIds = new Set(allCompletedChapters.map(c => c.chapterId));
+      const completedQuizIds = new Set(allCompletedQuizzes.map(q => q.quizId));
 
-            // Count unique quizIds
-            const uniqueQuizIds = new Set(completedQuizResults.map(result => result.quizId));
-            completedQuizzes = uniqueQuizIds.size;
-          }
+      // Calculate progress for each course using in-memory data
+      const coursesWithProgress = courses.map((course) => {
+        const totalChapters = course.chapters.length;
+        const totalQuizzes = course.quizzes.length;
+        const totalContent = totalChapters + totalQuizzes;
 
-          const completedContent = completedChapters + completedQuizzes;
-          const progress = totalContent > 0 ? (completedContent / totalContent) * 100 : 0;
+        const completedChapters = course.chapters.filter(ch => completedChapterIds.has(ch.id)).length;
+        const completedQuizzes = course.quizzes.filter(q => completedQuizIds.has(q.id)).length;
 
-          return {
-            ...course,
-            progress
-          };
-        })
-      );
+        const completedContent = completedChapters + completedQuizzes;
+        const progress = totalContent > 0 ? (completedContent / totalContent) * 100 : 0;
 
-      return NextResponse.json(coursesWithProgress);
+        return {
+          ...course,
+          progress
+        };
+      });
+
+      // Add cache headers to reduce queries
+      return NextResponse.json(coursesWithProgress, {
+        headers: {
+          'Cache-Control': 'private, s-maxage=30, stale-while-revalidate=60',
+        },
+      });
     }
 
     // For unauthenticated users, return courses without progress
@@ -181,7 +189,12 @@ export async function GET(req: Request) {
       progress: 0
     }));
 
-    return NextResponse.json(coursesWithoutProgress);
+    // Add cache headers to reduce queries
+    return NextResponse.json(coursesWithoutProgress, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+      },
+    });
   } catch (error) {
     console.log("[COURSES]", error);
     return new NextResponse("Internal Error", { status: 500 });

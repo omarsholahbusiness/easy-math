@@ -71,9 +71,10 @@ export const CourseSidebar = ({ course }: CourseSidebarProps) => {
       if (!courseId) {
         throw new Error("Course ID is required");
       }
+      // Removed timestamp cache-busting to allow browser/Accelerate caching
       const [contentResponse, courseResponse] = await Promise.all([
-        axios.get(`/api/courses/${courseId}/content?t=${Date.now()}`),
-        axios.get(`/api/courses/${courseId}?t=${Date.now()}`)
+        axios.get(`/api/courses/${courseId}/content`),
+        axios.get(`/api/courses/${courseId}`)
       ]);
       setCourseContent(contentResponse.data);
       setCourseTitle(courseResponse.data.title);
@@ -86,13 +87,10 @@ export const CourseSidebar = ({ course }: CourseSidebarProps) => {
   }, [course?.id, params.courseId]);
 
   // Refresh data when pathname changes (indicating navigation)
+  // Removed duplicate useEffect - only fetch once when pathname or courseId changes
   useEffect(() => {
     fetchCourseData();
   }, [fetchCourseData, pathname]);
-
-  useEffect(() => {
-    fetchCourseData();
-  }, [fetchCourseData]);
 
   useEffect(() => {
     // Update selected content based on current path

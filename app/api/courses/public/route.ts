@@ -2,6 +2,9 @@ import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
+// Cache for 60 seconds (1 minute)
+export const revalidate = 60;
+
 export async function GET() {
   try {
     // Try to get user for filtering
@@ -99,9 +102,46 @@ export async function GET() {
       enrollmentCount: purchases.length,
     }));
 
-    return NextResponse.json(coursesWithDefaultProgress);
+    // Add cache headers to reduce queries
+    return NextResponse.json(coursesWithDefaultProgress, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+      },
+    });
   } catch (error) {
-    console.log("[COURSES_PUBLIC]", error);
+    console.error("[COURSES_PUBLIC] Error details:", error);
+    
+    // Log more details about the error
+    if (error instanceof Error) {
+      console.error("[COURSES_PUBLIC] Error message:", error.message);
+      console.error("[COURSES_PUBLIC] Error stack:", error.stack);
+      
+      // Check if it's a database connection error (could be Accelerate issue)
+      if (error.message.includes("P1001") || error.message.includes("Can't reach database")) {
+        console.error("[COURSES_PUBLIC] Database connection error - check Accelerate URL or database connection");
+        return NextResponse.json(
+          { 
+            error: "Database connection failed", 
+            message: "Unable to connect to database. Please check your database connection or Accelerate configuration.",
+            details: process.env.NODE_ENV === "development" ? error.message : undefined
+          },
+          { status: 503 }
+        );
+      }
+      
+      // Check if it's an Accelerate-specific error
+      if (error.message.includes("accelerate") || error.message.includes("Accelerate")) {
+        console.error("[COURSES_PUBLIC] Accelerate-related error detected");
+        return NextResponse.json(
+          { 
+            error: "Accelerate connection error", 
+            message: "Error connecting through Prisma Accelerate. Please check your PRISMA_ACCELERATE_URL configuration.",
+            details: process.env.NODE_ENV === "development" ? error.message : undefined
+          },
+          { status: 503 }
+        );
+      }
+    }
     
     // If the table doesn't exist or there's a database connection issue,
     // return an empty array instead of an error
@@ -113,6 +153,13 @@ export async function GET() {
       return NextResponse.json([]);
     }
     
-    return new NextResponse("Internal Error", { status: 500 });
+    return NextResponse.json(
+      { 
+        error: "Internal Server Error",
+        message: "An error occurred while fetching courses",
+        details: process.env.NODE_ENV === "development" && error instanceof Error ? error.message : undefined
+      },
+      { status: 500 }
+    );
   }
 } 

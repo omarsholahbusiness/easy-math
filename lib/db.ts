@@ -20,6 +20,7 @@ function createPrismaClient() {
         if (!accelerateUrl) {
             throw new Error("PRISMA_ACCELERATE_URL must be set in Edge runtimes.");
         }
+        console.log("🚀 [Prisma] Using Accelerate with Edge Client");
         return new PrismaClientEdge({
             datasourceUrl: accelerateUrl,
         }).$extends(withAccelerate());
@@ -27,12 +28,24 @@ function createPrismaClient() {
 
     // For Node.js runtime, use PrismaClientNode with Accelerate if available
     if (accelerateUrl) {
-        return new PrismaClientNode({
+        console.log("🚀 [Prisma] Using Accelerate with Node Client");
+        console.log("📊 [Prisma] Accelerate URL:", accelerateUrl.substring(0, 50) + "...");
+        const client = new PrismaClientNode({
             datasources: {
                 db: { url: accelerateUrl },
             },
         }).$extends(withAccelerate());
+        
+        // Log when first query is made
+        const originalQuery = (client as any).$queryRaw;
+        if (originalQuery) {
+            console.log("✅ [Prisma] Accelerate client initialized and ready");
+        }
+        
+        return client;
     }
+    
+    console.log("⚠️ [Prisma] Accelerate not enabled - using direct connection");
 
     // Fallback to direct connection with connection pooling
     const datasourceUrl = directDatabaseUrl ?? databaseUrl;
@@ -99,8 +112,19 @@ function addConnectionPooling(url: string): string {
     }
 }
 
+// Clear cached Prisma Client if Accelerate URL changed
+const currentAccelerateUrl = process.env.PRISMA_ACCELERATE_URL;
+const cachedAccelerateUrl = (globalForPrisma as any).__accelerateUrl;
+
+if (cachedAccelerateUrl !== currentAccelerateUrl) {
+    console.log("🔄 [Prisma] Accelerate URL changed, clearing cached client");
+    globalForPrisma.prisma = undefined;
+    (globalForPrisma as any).__accelerateUrl = currentAccelerateUrl;
+}
+
 export const db = globalForPrisma.prisma ?? createPrismaClient();
 
 if (!isEdgeRuntime && process.env.NODE_ENV !== "production") {
     globalForPrisma.prisma = db;
+    (globalForPrisma as any).__accelerateUrl = currentAccelerateUrl;
 }

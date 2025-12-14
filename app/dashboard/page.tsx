@@ -113,21 +113,7 @@ const CoursesPage = async () => {
     }
   });
 
-  // Get unique completed quizzes by using findMany and counting the results
-  const completedQuizResults = await db.quizResult.findMany({
-    where: {
-      studentId: session.user.id
-    },
-    select: {
-      quizId: true
-    }
-  });
-
-  // Count unique quizIds
-  const uniqueQuizIds = new Set(completedQuizResults.map(result => result.quizId));
-  const completedQuizzes = uniqueQuizIds.size;
-
-  // Calculate average score from quiz results (using best attempt for each quiz)
+  // OPTIMIZED: Single query to get all quiz results (combines two previous queries)
   const quizResults = await db.quizResult.findMany({
     where: {
       studentId: session.user.id
@@ -141,14 +127,18 @@ const CoursesPage = async () => {
     }
   });
 
-  // Get only the best attempt for each quiz
-  const bestAttempts = new Map();
+  // Count unique quizIds and calculate average in one pass
+  const uniqueQuizIds = new Set<string>();
+  const bestAttempts = new Map<string, number>();
+  
   quizResults.forEach(result => {
+    uniqueQuizIds.add(result.quizId);
     if (!bestAttempts.has(result.quizId)) {
       bestAttempts.set(result.quizId, result.percentage);
     }
   });
 
+  const completedQuizzes = uniqueQuizIds.size;
   const averageScore = bestAttempts.size > 0 
     ? Math.round(Array.from(bestAttempts.values()).reduce((sum, percentage) => sum + percentage, 0) / bestAttempts.size)
     : 0;
@@ -199,51 +189,57 @@ const CoursesPage = async () => {
     }
   });
 
-  const coursesWithProgress = await Promise.all(
-    courses.map(async (course) => {
-      const totalChapters = course.chapters.length;
-      const totalQuizzes = course.quizzes.length;
-      const totalContent = totalChapters + totalQuizzes;
+  // OPTIMIZED: Batch all progress queries instead of N+1 queries
+  // Get all chapter IDs and quiz IDs from all courses
+  const allChapterIds = courses.flatMap(course => course.chapters.map(ch => ch.id));
+  const allQuizIds = courses.flatMap(course => course.quizzes.map(q => q.id));
 
-      const completedChapters = await db.userProgress.count({
-        where: {
-          userId: session.user.id,
-          chapterId: {
-            in: course.chapters.map(chapter => chapter.id)
-          },
-          isCompleted: true
-        }
-      });
+  // Single query for all completed chapters
+  const allCompletedChapters = await db.userProgress.findMany({
+    where: {
+      userId: session.user.id,
+      chapterId: { in: allChapterIds },
+      isCompleted: true
+    },
+    select: {
+      chapterId: true
+    }
+  });
 
-      // Get unique completed quizzes by using findMany and counting the results
-      const completedQuizResults = await db.quizResult.findMany({
-        where: {
-          studentId: session.user.id,
-          quizId: {
-            in: course.quizzes.map(quiz => quiz.id)
-          }
-        },
-        select: {
-          quizId: true
-        }
-      });
+  // Single query for all completed quizzes
+  const allCompletedQuizzes = await db.quizResult.findMany({
+    where: {
+      studentId: session.user.id,
+      quizId: { in: allQuizIds }
+    },
+    select: {
+      quizId: true
+    }
+  });
 
-      // Count unique quizIds
-      const uniqueQuizIds = new Set(completedQuizResults.map(result => result.quizId));
-      const completedQuizzes = uniqueQuizIds.size;
+  // Create sets for fast lookup
+  const completedChapterIds = new Set(allCompletedChapters.map(c => c.chapterId));
+  const completedQuizIds = new Set(allCompletedQuizzes.map(q => q.quizId));
 
-      const completedContent = completedChapters + completedQuizzes;
+  // Calculate progress for each course using in-memory data
+  const coursesWithProgress = courses.map((course) => {
+    const totalChapters = course.chapters.length;
+    const totalQuizzes = course.quizzes.length;
+    const totalContent = totalChapters + totalQuizzes;
 
-      const progress = totalContent > 0 
-        ? (completedContent / totalContent) * 100 
-        : 0;
+    const completedChapters = course.chapters.filter(ch => completedChapterIds.has(ch.id)).length;
+    const completedQuizzes = course.quizzes.filter(q => completedQuizIds.has(q.id)).length;
 
-      return {
-        ...course,
-        progress
-      } as CourseWithProgress;
-    })
-  );
+    const completedContent = completedChapters + completedQuizzes;
+    const progress = totalContent > 0 
+      ? (completedContent / totalContent) * 100 
+      : 0;
+
+    return {
+      ...course,
+      progress
+    } as CourseWithProgress;
+  });
 
   return (
     <div className="p-6 space-y-6">
